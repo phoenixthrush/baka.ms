@@ -1,6 +1,7 @@
-import requests
 import os
 import shutil
+
+import requests
 from urllib.parse import urljoin, urlparse
 from bs4 import BeautifulSoup
 
@@ -97,8 +98,47 @@ def relative_path(url):
     return path[len("/galleries/") :]  # keeps artist/filename.html
 
 
+def extract_direct_links(html_url, output_dir):
+    """Extract direct image and video links from HTML page and save to text file"""
+    try:
+        response = requests.get(html_url, headers=HEADERS, timeout=30)
+        response.raise_for_status()
+
+        soup = BeautifulSoup(response.content, "html.parser")
+        direct_links = []
+
+        # Find all images with data-idimg attributes (photos)
+        images = soup.find_all("img", {"data-idimg": True})
+        for img in images:
+            data_id = img.get("data-idimg")
+            if data_id:
+                # Apply the token reversal pattern
+                reversed_token = data_id[::-1]
+                # Construct direct URL for photos
+                direct_url = f"https://photos.baka.ms/photoservice/uwu/pull/{reversed_token}?{data_id}"
+                direct_links.append(direct_url)
+
+        # Save direct links to text file
+        output_file = f"{output_dir}/links.txt"
+
+        # Ensure directory exists
+        os.makedirs(output_dir, exist_ok=True)
+
+        with open(output_file, "w", encoding="utf-8") as f:
+            for link in direct_links:
+                f.write(f"{link}\n")
+
+        print(f"  Extracted {len(direct_links)} direct links to {output_file}")
+        print(f"  Photos found: {len(images)} (video links skipped)")
+        return len(direct_links)
+
+    except Exception as e:
+        print(f"  Error extracting links from {html_url}: {e}")
+        return 0
+
+
 def create_folder_structure():
-    """Create folder structure where each HTML file becomes a directory named after the file"""
+    """Create folder structure where each HTML file becomes a directory named after a file"""
     print("\nCreating folder structure where each HTML file becomes a directory...")
 
     # Remove existing galleries directory if it exists
@@ -107,11 +147,16 @@ def create_folder_structure():
         print("Removed existing galleries directory")
 
     # Read URLs from files.txt and create directories
+    total_images = 0
+    processed_count = 0
+
     with open("files.txt", "r", encoding="utf-8") as f:
         for line in f:
             url = line.strip()
             if not url:
                 continue
+
+            processed_count += 1
 
             # Extract path from URL (remove https://baka.ms/galleries/)
             path = url.replace("https://baka.ms/galleries/", "")
@@ -123,7 +168,15 @@ def create_folder_structure():
             os.makedirs(dir_folder, exist_ok=True)
             print(f"Created directory: {dir_folder}")
 
-    print("Folder structure creation complete!")
+            # Extract direct links for all HTML files
+            if url.endswith(".html"):
+                image_count = extract_direct_links(url, dir_folder)
+                total_images += image_count
+
+    print("\nFolder structure creation complete!")
+    print(f"Processed {processed_count} directories")
+    print(f"Extracted {total_images} total direct image links")
+    print("Direct links saved to links.txt files in each folder")
 
 
 def main():
