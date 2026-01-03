@@ -65,13 +65,27 @@ def fetch_links(url: str) -> list[str]:
 
     anchors = soup.select("tr a[href]") or soup.find_all("a", href=True)
 
+    print(f"DEBUG: Processing URL: {url}")
+    print(f"DEBUG: Found {len(anchors)} links")
+
     for a in anchors:
         text = a.text.strip()
-        if not text or text in EXCLUDE or is_blacklisted(text):
+        if not text or text in EXCLUDE:
             continue
 
-        href = a["href"]
-        full_url = BASE_DOMAIN + href if href.startswith("/") else urljoin(url, href)
+        href = str(a["href"])
+        # Ensure the base URL ends with / for proper urljoin behavior
+        base_url = url if url.endswith("/") else url + "/"
+        full_url = (
+            BASE_DOMAIN + href if href.startswith("/") else urljoin(base_url, href)
+        )
+
+        # If we're at root level and this is an HTML file,
+        # skip it in favor of discovering it through artist directories
+        if url == BASE_URL.rstrip("/") + "/" and href.endswith(".html"):
+            print(f"Skipping direct HTML file: {href}")
+            continue
+
         links.append(full_url)
 
     return links
@@ -151,7 +165,7 @@ def create_folder_structure():
 
     with open("files.txt", encoding="utf-8") as f:
         for url in map(str.strip, f):
-            if not url or is_blacklisted(url):
+            if not url:
                 continue
 
             processed += 1
@@ -159,8 +173,15 @@ def create_folder_structure():
             if not rel:
                 continue
 
+            # Skip if artist is blacklisted (check first path component)
+            first_path = rel.split("/")[0] if "/" in rel else rel.split(".")[0]
+            if is_blacklisted(first_path):
+                print(f"Skipping blacklisted: {first_path}")
+                continue
+
             folder = os.path.join("galleries", rel.replace(".html", ""))
             os.makedirs(folder, exist_ok=True)
+            print(f"Created directory: {folder}")
 
             if url.endswith(".html"):
                 total_images += extract_direct_links(url, folder)
