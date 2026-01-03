@@ -26,7 +26,7 @@ find galleries -name "links.txt" -type f | while read links_file; do
 			--timeout=60 \
 			--connect-timeout=30 \
 			--max-file-not-found=3 \
-			--auto-file-renaming=true \
+			--allow-overwrite=false \
 			--console-log-level=notice \
 			--summary-interval=0 \
 			--show-console-readout=true \
